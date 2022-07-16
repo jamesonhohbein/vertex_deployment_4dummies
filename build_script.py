@@ -4,19 +4,22 @@
 import os 
 from google.cloud import aiplatform
 
-def build_huggingface_autoregressive_deployment(model_link:str,PROJECT_ID:str,GCS_MODEL_ARTIFACTS_URI:str,BUCKET_NAME:str,APP_NAME:str,VERSION:float,HANDLER:str,machine_type:str):
+def build_huggingface_autoregressive_deployment(model_link:str,PROJECT_ID:str,APP_NAME:str,VERSION:float,HANDLER:str,machine_type:str,DESCRIPTION:str):
     '''
     Central function to build and and deploy an autoregressive huggingface model into vertex ai 
+
+    Future:
+        Add options for accelerators by filling the accelerator type and count fields https://cloud.google.com/vertex-ai/docs/training/configure-compute#specifying_gpus
 
     params
         model_link:str this is the url to a huggingface model 
         PROJECT_ID:str the project ID of the GCP 
         GCS_MODEL_ARTIFACTS_URI:str the path in cloud storage where the model is stored 
-        BUCKET_NAME:str the name of the bucket where the model artifacts are store 
         APP_NAME:str whatever you want to name the application
         VERSION:float whatever version you are uploading of this model 
         HANDLER:str path to the torchserve handler you wish to use with thise model 
         machine_type:str the machine type to host the endpoint, found here https://cloud.google.com/vertex-ai/docs/predictions/configure-compute
+        DESCRIPTION:str the description of the model 
     '''
 
 
@@ -36,6 +39,7 @@ def build_huggingface_autoregressive_deployment(model_link:str,PROJECT_ID:str,GC
     # get the name of the model 
     model_folder = model_link.split('/')[model_link.count('/')]
 
+
     # rename the folder 
     os.system(f"mv {model_folder} predictor/model")
 
@@ -45,12 +49,17 @@ def build_huggingface_autoregressive_deployment(model_link:str,PROJECT_ID:str,GC
         if i[-4:] == '.bin':
             model_source = 'predictor/model/'+i
 
-    os.system(f"torch-model-archiver --model-name {APP_NAME} --version {VERSION} --model-file {model_source} --serialized-file {model_source} --handler {HANDLER}")
+    # compile the model in torch serve 
+    #os.system(f"torch-model-archiver --model-name {APP_NAME} --version {VERSION} --model-file {model_source} --serialized-file {model_source} --handler {HANDLER}")
 
     handler_name = HANDLER.split('/')[HANDLER.count('/')]
 
     extra_files = []
 
+    # remove other saved models 
+    [os.remove('predictor/model/'+x) for x in os.listdir('predictor/model') if '.h5' in x or '.msgpack' in x]
+
+    # append names of extra file locations for when they are transfered. Do not include other model savings such as tensorflow or flax models. This is for efficiency. 
     [extra_files.append('/home/model-server/'+x) for x in os.listdir('predictor/model')]
 
 
@@ -110,9 +119,9 @@ echo "Writing ./predictor/Dockerfile"
 
 
     # init config model upload to vertex AI 
-    aiplatform.init(project=PROJECT_ID, staging_bucket=BUCKET_NAME)
+    aiplatform.init(project=PROJECT_ID)
     model_display_name = f"{APP_NAME}-v{VERSION}"
-    model_description = "PyTorch based text classifier with custom container"
+    model_description = DESCRIPTION
 
     MODEL_NAME = APP_NAME
     health_route = "/ping"
@@ -121,6 +130,7 @@ echo "Writing ./predictor/Dockerfile"
 
 
     # upload model to vertex AI 
+    print('\n\nDeploying Model to Vertex AI...\n')
     model = aiplatform.Model.upload(
         display_name=model_display_name,
         description=model_description,
@@ -136,14 +146,13 @@ echo "Writing ./predictor/Dockerfile"
 
     # config and deploy endpoint to a model in vertex AI 
     endpoint_display_name = f"{APP_NAME}-endpoint"
+    print('\n\nSpinning up endpoint\n')
     endpoint = aiplatform.Endpoint.create(display_name=endpoint_display_name)
 
     traffic_percentage = 100
     deployed_model_display_name = model_display_name
-    min_replica_count = 1
-    max_replica_count = 3
     sync = True
-
+    print('\n\nConnecting Endpoint and Model, this may take a while...\n')
     model.deploy(
         endpoint=endpoint,
         deployed_model_display_name=deployed_model_display_name,

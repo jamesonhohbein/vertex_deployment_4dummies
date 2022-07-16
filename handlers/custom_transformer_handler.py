@@ -13,18 +13,18 @@ logger = logging.getLogger(__name__)
 
 class TransformersHandler(BaseHandler):
     """
-    The handler takes an input string and returns the classification text 
-    based on the serialized transformers checkpoint.
+    This handler takes in a input string and multiple parameters and returns autoregressive generations from various OPT models. 
     """
     def __init__(self):
         super(TransformersHandler, self).__init__()
         self.initialized = False
 
     def initialize(self, ctx):
-        """ Loads the model.pt file and initialized the model object.
-        Instantiates Tokenizer for preprocessor to use
-        Loads labels to name mapping file for post-processing inference response
+        """ 
+        The function looks at the specs of the device that is running the server and loads in the model and any other objects that must be loaded in.
+        
         """
+        # get the passed properties of the torchserve compiler and the device 
         self.manifest = ctx.manifest
         properties = ctx.system_properties
         model_dir = properties.get("model_dir")
@@ -54,8 +54,10 @@ class TransformersHandler(BaseHandler):
         self.initialized = True
 
     def preprocess(self, data):
-        """ Preprocessing input request by tokenizing
-            Extend with your own preprocessing steps as needed
+        """
+        The initial entry of data being passed for inference. 
+        Here it is where we extract the parameters and inputs. 
+        Inputs are tokenized for inference.
         """
         params = data[0].get("parameters")
         text = data[0].get("data").get('text')
@@ -73,7 +75,8 @@ class TransformersHandler(BaseHandler):
         return inputs
 
     def inference(self, inputs):
-        """ Predict the class of a text using a trained transformer model.
+        """
+        Function for performing inference on the processed input. The predictions are then decoded and returned.
         """
         
         prediction = self.model.generate(inputs.input_ids,
@@ -96,4 +99,7 @@ class TransformersHandler(BaseHandler):
         return [prediction]
 
     def postprocess(self, inference_output):
+        '''
+        Extra function for processing inference outputs if not already done so.
+        '''
         return inference_output
