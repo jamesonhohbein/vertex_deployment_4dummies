@@ -7,6 +7,12 @@
 ## Requirements 
 - Docker: You need to be working in an environment where docker is accessible. 
 - GCP SDK Authentication: You need to be authenticated to make changes to a GCP project via the GCP Python SDK. (I recommend running in a Vertex AI workbench notebook!)
+
+## Important Notes
+- This software is designed for pytorch models only. 
+- Depending on the model you use, you will need to make a custom handler to handle the needs of the model. The custom_transformer_handler is for the various OPT models that are offered in huggingface. 
+- The way you format your input json for inference will be dependent on the code in your handler. 
+
 ## Usage 
 Install Package and import functions 
 
